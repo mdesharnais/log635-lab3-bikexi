@@ -31,6 +31,7 @@ import qualified Data.List as List
 import qualified System.Environment as Environment
 import qualified Text.CSV as CSV
 
+import Control.Applicative ((<|>))
 import Text.CSV (CSV)
 
 main :: IO ()
@@ -38,7 +39,7 @@ main = do
     args <- Environment.getArgs
     case args of
         [path, vector] -> runProgram path vector
-        _ -> Environment.getProgName >>= (putStrLn . ("Usage: " ++) . (++ " <file> <query-vector>"))
+        _ -> Environment.getProgName >>= putStrLn . ("Usage: " ++) . (++ " <file> <query-vector>")
 
 {-| Learn from some data in a CSV file and predict the ouput of the given vector.  -}
 runProgram :: FilePath -- ^ Relative path to the CSV file containing the history from which the system will learn.
@@ -69,13 +70,8 @@ mkHistory = map f
 {-| Predict the output value of a given vector, based on the history of other vectors.  -}
 predict :: EuclideanVector Double -> [(Double, Integer)] -> Maybe Integer
 predict _ [] = Nothing
-predict vector history =
-    case lookup norm history of
-        (Just value) -> Just value
-        Nothing -> Just estimate
+predict vector history = lookup norm history <|> Just estimate
     where norm = euclideanNorm vector
           estimate = round $ sum (zipWith (*) ds fs) / sum ds
-          ds = take n $ map ((1/) . (**2) . fst) relativeDistances
-          fs = take n $ map (fromInteger . snd) relativeDistances
-          relativeDistances = List.sort $ map (\(a,b) -> (abs (norm - a), b)) history
-          n = 5
+          (ds, fs) = unzip $ take 5 $ List.sortBy (flip compare) $ map d history
+          d (a, b) = (1 / (norm - a)**2, fromInteger b)
